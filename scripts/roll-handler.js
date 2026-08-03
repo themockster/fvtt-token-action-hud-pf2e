@@ -8,7 +8,9 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
          * @param {string} id The macro id
          */
         async #executeMacroById (id) {
-            game.packs.get('pf2e.pf2e-macros').getDocument(id).then((e) => e.execute())
+            const pack = game.packs.get('sf2e.macros') ?? game.packs.get('pf2e.pf2e-macros')
+            if (!pack) return
+            pack.getDocument(id).then((e) => e.execute())
         }
 
         /**
@@ -201,6 +203,9 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
             case 'heroPoints':
                 await this.#adjustResources(actor, 'heroPoints', 'value')
                 break
+            case 'resolvePoints':
+                await this.#adjustResources(actor, 'resolve', 'value')
+                break
             case 'mythicPoints':
                 await this.#adjustResources(actor, 'mythicPoints', 'value')
                 break
@@ -227,6 +232,9 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
                 break
             case 'skill':
                 await this.#rollSkill(event, actor, actionId)
+                break
+            case 'systemAction':
+                await this.#useSystemAction(event, actor, actionId)
                 break
             case 'strike':
                 this.#rollStrike(event, actor, actionId)
@@ -377,11 +385,14 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
             }
 
             switch (resource) {
-            case "heroPoints":
-                await actor.update({ "system.resources.heroPoints.value": value })
+            case 'heroPoints':
+                await actor.update({ 'system.resources.heroPoints.value': value })
                 break
-            case "mythicPoints":
-                await actor.update({ "system.resources.mythicPoints.value": value })
+            case 'resolve':
+                await actor.update({ 'system.resources.resolve.value': value })
+                break
+            case 'mythicPoints':
+                await actor.update({ 'system.resources.mythicPoints.value': value })
                 break
             }
 
@@ -609,21 +620,56 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
         }
 
         /**
+         * Use a system Action from game.pf2e.actions (slug)
+         * @private
+         * @param {object} event    The event
+         * @param {object} actor    The actor
+         * @param {string} actionId The action slug
+         */
+        async #useSystemAction (event, actor, actionId) {
+            const action = game.pf2e?.actions?.get?.(actionId)
+            if (!action?.use) {
+                // Legacy function-style actions (e.g. balance on actions.balance)
+                const legacy = game.pf2e?.actions?.[actionId]
+                if (typeof legacy === 'function') {
+                    return legacy({ event, actors: [actor] })
+                }
+                return
+            }
+            await action.use({ event, actors: [actor] })
+        }
+
+        /**
          * Perform utility action
          * @private
          * @param {object} token    The token
          * @param {string} actionId The action id
          */
         async #performUtilityAction (token, actionId) {
+            const actor = token?.actor
+            const actionsApi = game.pf2e?.actions
+
             switch (actionId) {
             case 'treatWounds':
-                this.#executeMacroById('6duZj0Ygiqv712rq')
+                if (typeof actionsApi?.treatWounds === 'function') {
+                    actionsApi.treatWounds({ actors: [actor] })
+                } else {
+                    this.#executeMacroById('6duZj0Ygiqv712rq')
+                }
                 break
             case 'rest':
-                this.#executeMacroById('0GU2sdy3r2MeC56x')
+                if (typeof actionsApi?.restForTheNight === 'function') {
+                    actionsApi.restForTheNight({ actors: [actor] })
+                } else {
+                    this.#executeMacroById('0GU2sdy3r2MeC56x')
+                }
                 break
             case 'takeBreather':
-                this.#executeMacroById('aS6F7PSUlS9JM5jr')
+                if (typeof actionsApi?.takeABreather === 'function') {
+                    actionsApi.takeABreather({ actors: [actor] })
+                } else {
+                    this.#executeMacroById('aS6F7PSUlS9JM5jr')
+                }
                 break
             case 'endTurn':
                 if (game.combat?.current?.tokenId === token.id) {

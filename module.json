@@ -1,7 +1,7 @@
 {
-  "id": "token-action-hud-pf2e",
-  "title": "Token Action HUD Pathfinder 2e",
-  "description": "Token Action HUD is a repositionable HUD of actions for a selected token",
+  "id": "token-action-hud-sf2e",
+  "title": "Token Action HUD Starfinder 2e",
+  "description": "Token Action HUD is a repositionable HUD of actions for a selected token (Starfinder Second Edition)",
   "authors": [
     {
       "name": "Larkinabout",
@@ -22,15 +22,15 @@
   "version": "This is auto replaced",
   "compatibility": {
     "minimum": "14",
-    "verified": "14.360"
+    "verified": "14.365"
   },
   "esmodules": [
-    "./scripts/token-action-hud-pf2e.min.js"
+    "./scripts/token-action-hud-sf2e.min.js"
   ],
   "scripts": [
   ],
   "styles": [
-    "./styles/tah-pf2e.css"
+    "./styles/tah-sf2e.css"
   ],
   "languages": [
     {
@@ -93,11 +93,11 @@
   "relationships": {
     "systems": [
       {
-        "id": "pf2e",
+        "id": "sf2e",
         "type": "system",
         "compatibility": {
-          "minimum": "8.0.0",
-          "verified": "8.0.1"
+          "minimum": "1.0.0",
+          "verified": "1.4.0"
         }
       }
     ],
@@ -120,7 +120,7 @@
   "socket": false,
   "manifest": "This is auto replaced",
   "download": "This is auto replaced",
-  "readme": "https://github.com/Larkinabout/fvtt-token-action-hud-pf2e#readme",
+  "readme": "https://github.com/themockster/fvtt-token-action-hud-pf2e#readme",
   "protected": false,
   "coreTranslation": false,
   "library": false
