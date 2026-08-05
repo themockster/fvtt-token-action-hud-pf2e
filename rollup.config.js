@@ -8,11 +8,11 @@ export default [
                 'scripts/*.js'
             ],
             exclude: [
-                'scripts/token-action-hud-pf2e.min.js']
+                'scripts/token-action-hud-sf2e.min.js']
         },
         output: {
             format: 'esm',
-            file: 'scripts/token-action-hud-pf2e.min.js',
+            file: 'scripts/token-action-hud-sf2e.min.js',
             sourcemap: true
         },
         plugins: [

@@ -1,8 +1,11 @@
 name: Release Creation
 
-on: 
+on:
   release:
     types: [published]
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -35,14 +38,14 @@ jobs:
     - run: npm run build
 
     # Create a zip file with all files required by the module to add to the release
-    - run: zip -r ./module.zip module.json readme.md LICENSE languages/ scripts/token-action-hud-pf2e.min.js styles/
+    - run: zip -r ./module.zip module.json readme.md languages/ scripts/token-action-hud-sf2e.min.js styles/
 
     # Create a release for this specific version
     - name: Update Release with Files
       id: create_version_release
       uses: ncipollo/release-action@v1
       with:
-        allowUpdates: true # Set this to false if you want to prevent updating existing releases
+        allowUpdates: true
         name: ${{ github.event.release.name }}
         draft: ${{ github.event.release.unpublished }}
         prerelease: ${{ github.event.release.prerelease }}

@@ -16,7 +16,7 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
 
         /** @override */
         getAvailableRollHandlers () {
-            const coreTitle = 'Core PF2E'
+            const coreTitle = 'Core SF2E'
             const choices = { core: coreTitle }
             return choices
         }
@@ -40,21 +40,7 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
 
         /** @override */
         async registerDefaults () {
-            const defaults = DEFAULTS
-            if (game.modules.get('pf2e-hero-actions')?.active) {
-                const listType = coreModule.api.Utils.i18n('tokenActionHud.group')
-                const name = coreModule.api.Utils.i18n('tokenActionHud.pf2e.heroActions')
-                defaults.groups.push(
-                    {
-                        id: 'hero-actions',
-                        name,
-                        listName: `${listType}: ${name}`,
-                        type: 'system'
-                    }
-                )
-                defaults.groups.sort((a, b) => a.id.localeCompare(b.id))
-            }
-            return defaults
+            return DEFAULTS
         }
     }
 })

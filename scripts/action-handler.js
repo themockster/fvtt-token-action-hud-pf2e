@@ -91,6 +91,7 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
                 this.#buildEffects(),
                 this.#buildFeats(),
                 this.#buildHeroActions(),
+                this.#buildPoints('resolvePoints'),
                 this.#buildPoints('heroPoints'),
                 this.#buildPoints('mythicPoints'),
                 this.#buildInitiative(),
@@ -454,22 +455,38 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
         }
 
         /**
-         * Build hero points
+         * Build hero / resolve / mythic points
          */
         async #buildPoints (actionType) {
             let actions, groupData
 
-            const mythicEnabled = this.actor.system.resources?.mythicPoints.max ? true : false
+            const mythicEnabled = this.actor.system.resources?.mythicPoints?.max ? true : false
+            const resolve = this.actor.system.resources?.resolve
+            const hasResolve = Number.isFinite(resolve?.max) && resolve.max > 0
 
-            // Create group data
-            if (actionType === 'heroPoints' && !mythicEnabled) {
+            // Resolve Points (Starfinder core resource)
+            if (actionType === 'resolvePoints' && hasResolve) {
+                groupData = { id: 'resolve-points', type: 'system' }
+
+                const value = resolve.value ?? 0
+                const max = resolve.max
+
+                actions = [{
+                    id: 'resolvePoints',
+                    name: coreModule.api.Utils.i18n('PF2E.Actor.Resource.Resolve'),
+                    encodedValue: [actionType, actionType].join(this.delimiter),
+                    info1: { text: (max > 0) ? `${value}/${max}` : '' }
+                }]
+            }
+            // Hero Points — skip when Resolve is present (SF2e uses Resolve instead)
+            else if (actionType === 'heroPoints' && !mythicEnabled && !hasResolve) {
                 groupData = { id: 'hero-points', type: 'system' }
 
                 const heroPoints = this.actor.system.resources?.heroPoints
+                if (!heroPoints) return
                 const value = heroPoints.value
                 const max = heroPoints.max
 
-                // Get actions
                 actions = [{
                     id: 'heroPoints',
                     name: coreModule.api.Utils.i18n('PF2E.Actor.Resource.HeroPoints'),
@@ -484,7 +501,6 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
                 const value = mythicPoints.value
                 const max = mythicPoints.max
 
-                // Get actions
                 actions = [{
                     id: 'mythicPoints',
                     name: coreModule.api.Utils.i18n('PF2E.Actor.Resource.MythicPoints'),
@@ -652,7 +668,7 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
                     const name = heroAction?.name
                     const listName = `${actionTypeName}: ${name}`
                     const encodedValue = [actionType, id].join(this.delimiter)
-                    const img = coreModule.api.Utils.getImage('systems/pf2e/icons/actions/Passive.webp')
+                    const img = coreModule.api.Utils.getImage('systems/sf2e/icons/actions/Passive.webp')
                     const uuidData = (heroAction?.uuid) ? await fromUuid(heroAction?.uuid) : null
                     const tooltipData = {
                         name,
@@ -1002,11 +1018,13 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
                 }
             ]
 
-            // Take a Breather
-            if (game.settings.get('pf2e', 'staminaVariant')) {
+            // Take a Breather — stamina variant, or SF2e Resolve/Stamina present on the actor
+            const staminaEnabled = !!game.settings.get('sf2e', 'staminaVariant') ||
+                Number.isFinite(this.actor?.system?.resources?.resolve?.max)
+            if (staminaEnabled) {
                 actions.push({
                     id: 'takeBreather',
-                    name: coreModule.api.Utils.i18n('tokenActionHud.pf2e.takeBreather'),
+                    name: coreModule.api.Utils.i18n('tokenActionHud.sf2e.takeBreather'),
                     encodedValue: [actionType, 'takeBreather'].join(this.delimiter)
                 })
             }
@@ -1067,52 +1085,97 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
 
         /**
          * Build skill actions
+         * Prefer game.pf2e.actions (works on SF2e); fall back to action-macros pack if present.
          * @private
          */
         async #buildSkillActions () {
-            const actionType = 'compendiumMacro'
-
-            // Get skill actions
-            const actionMacros = await game.packs.get('pf2e.action-macros').getIndex()
-
-            if (!actionMacros.size) return
-
             const skillActionsMap = new Map()
-
-            // Get actions
             const actions = []
-            for (const actionMacro of actionMacros) {
-                const skillAction = SKILL_ACTION[actionMacro._id]
 
-                if (!skillAction) continue
+            // Primary path: SF2e/PF2e system actions API (Collection of Action)
+            const systemActions = game.pf2e?.actions
+            if (systemActions?.contents?.length || systemActions?.size) {
+                const actionType = 'systemAction'
+                const list = systemActions.contents ?? [...systemActions]
 
-                const id = actionMacro._id
-                const actionName = coreModule.api.Utils.i18n(skillAction.name)
-                const skillName = coreModule.api.Utils.i18n(SKILL[skillAction.skill]?.name)
-                const name = `${actionName} - ${skillName}`
-                const actionTypeName = `${coreModule.api.Utils.i18n(ACTION_TYPE.skillAction)}: ` ?? ''
-                const listName = `${actionTypeName}${name}`
-                const encodedValue = [actionType, 'pf2e.action-macros', id].join(this.delimiter)
-                const icon1 = this.#getActionIcon(skillAction.actionCost)
-                const img = skillAction.image
-                const modifier = coreModule.api.Utils.getModifier(this.actor?.skills[skillAction.skill]?.check?.mod)
-                const info1 = this.actor ? { text: modifier } : null
+                for (const systemAction of list) {
+                    if (systemAction.section !== 'skill') continue
 
-                const action = {
-                    id,
-                    name,
-                    listName,
-                    encodedValue,
-                    icon1,
-                    img,
-                    info1
+                    const statistic = Array.isArray(systemAction.statistic)
+                        ? systemAction.statistic[0]
+                        : systemAction.statistic
+                    if (!statistic || !SKILL[statistic]) continue
+
+                    const id = systemAction.slug
+                    const actionName = coreModule.api.Utils.i18n(systemAction.name)
+                    const skillName = coreModule.api.Utils.i18n(SKILL[statistic]?.name)
+                    const name = `${actionName} - ${skillName}`
+                    const actionTypeName = `${coreModule.api.Utils.i18n(ACTION_TYPE.skillAction)}: ` ?? ''
+                    const listName = `${actionTypeName}${name}`
+                    const encodedValue = [actionType, id].join(this.delimiter)
+                    const icon1 = this.#getActionIcon(systemAction.cost ?? 'passive')
+                    const img = systemAction.img || null
+                    const modifier = coreModule.api.Utils.getModifier(this.actor?.skills?.[statistic]?.check?.mod)
+                    const info1 = this.actor ? { text: modifier } : null
+
+                    const action = {
+                        id,
+                        name,
+                        listName,
+                        encodedValue,
+                        icon1,
+                        img,
+                        info1
+                    }
+
+                    actions.push(action)
+
+                    if (!skillActionsMap.has(statistic)) skillActionsMap.set(statistic, new Map())
+                    skillActionsMap.get(statistic).set(id, { ...action, name: actionName })
                 }
+            } else {
+                // Fallback: legacy action-macros pack (mainly PF2e; may be absent on SF2e)
+                const actionType = 'compendiumMacro'
+                const pack = game.packs.get('sf2e.action-macros') ?? game.packs.get('pf2e.action-macros')
+                const actionMacros = pack ? await pack.getIndex() : null
 
-                actions.push(action)
+                if (!actionMacros?.size) return
 
-                skillActionsMap.set(skillAction.skill, skillActionsMap.get(skillAction.skill) || new Map())
-                skillActionsMap.get(skillAction.skill).set(actionMacro._id, { ...action, name: actionName })
+                for (const actionMacro of actionMacros) {
+                    const skillAction = SKILL_ACTION[actionMacro._id]
+                    if (!skillAction) continue
+
+                    const id = actionMacro._id
+                    const actionName = coreModule.api.Utils.i18n(skillAction.name)
+                    const skillName = coreModule.api.Utils.i18n(SKILL[skillAction.skill]?.name)
+                    const name = `${actionName} - ${skillName}`
+                    const actionTypeName = `${coreModule.api.Utils.i18n(ACTION_TYPE.skillAction)}: ` ?? ''
+                    const listName = `${actionTypeName}${name}`
+                    const packId = pack.collection
+                    const encodedValue = [actionType, packId, id].join(this.delimiter)
+                    const icon1 = this.#getActionIcon(skillAction.actionCost)
+                    const img = skillAction.image
+                    const modifier = coreModule.api.Utils.getModifier(this.actor?.skills[skillAction.skill]?.check?.mod)
+                    const info1 = this.actor ? { text: modifier } : null
+
+                    const action = {
+                        id,
+                        name,
+                        listName,
+                        encodedValue,
+                        icon1,
+                        img,
+                        info1
+                    }
+
+                    actions.push(action)
+
+                    skillActionsMap.set(skillAction.skill, skillActionsMap.get(skillAction.skill) || new Map())
+                    skillActionsMap.get(skillAction.skill).set(actionMacro._id, { ...action, name: actionName })
+                }
             }
+
+            if (!actions.length) return
 
             // Add actions to HUD
             await this.addActions(actions, { id: 'skill-actions-ungrouped', type: 'system' })
@@ -1131,12 +1194,12 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
                 await this.addGroup(groupData, { id: 'skill-actions-grouped', type: 'system' })
 
                 // Get actions
-                const actions = [...skillActions].map(([_, skillAction]) => {
+                const skillActionList = [...skillActions].map(([_, skillAction]) => {
                     return skillAction
                 })
 
                 // Add actions to HUD
-                await this.addActions(actions, groupData)
+                await this.addActions(skillActionList, groupData)
             }
         }
 
@@ -1205,7 +1268,7 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
                         const actionTypeName = `${coreModule.api.Utils.i18n(ACTION_TYPE[actionType])}: ` ?? ''
                         const listName = `${actionTypeName}${name}`
                         const encodedValue = [actionType, id].join(this.delimiter)
-                        const cssClass = (this.actor && this.colorSkills && skillData.rank > 0) ? `tah-pf2e-skill-rank-${skillData.rank}` : ''
+                        const cssClass = (this.actor && this.colorSkills && skillData.rank > 0) ? `tah-sf2e-skill-rank-${skillData.rank}` : ''
                         const modifier = coreModule.api.Utils.getModifier(skillData.check?.mod)
                         const info1 = this.actor ? { text: modifier } : ''
                         const tooltipName = `${fullName}${(this.actor && modifier) ? ` ${modifier}` : ''}`
@@ -1761,7 +1824,7 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
 
                             if (!item) {
                                 const id = 'noAmmo'
-                                const name = coreModule.api.Utils.i18n('tokenActionHud.pf2e.noAmmo')
+                                const name = coreModule.api.Utils.i18n('tokenActionHud.sf2e.noAmmo')
                                 actions.push({
                                     id,
                                     name,
@@ -1922,9 +1985,9 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
                 : statistic.dc.value
             const spellAttackModifier = statistic.check.mod
             const spellAttackBonus = spellAttackModifier >= 0
-                ? `${coreModule.api.Utils.i18n('tokenActionHud.pf2e.atk')} +${spellAttackModifier}`
-                : `${coreModule.api.Utils.i18n('tokenActionHud.pf2e.atk')} ${spellAttackModifier}`
-            const spellDcInfo = `${coreModule.api.Utils.i18n('tokenActionHud.pf2e.dc')}${spellDc}`
+                ? `${coreModule.api.Utils.i18n('tokenActionHud.sf2e.atk')} +${spellAttackModifier}`
+                : `${coreModule.api.Utils.i18n('tokenActionHud.sf2e.atk')} ${spellAttackModifier}`
+            const spellDcInfo = `${coreModule.api.Utils.i18n('tokenActionHud.sf2e.dc')}${spellDc}`
             return `${spellAttackBonus} ${spellDcInfo}`
         }
 
