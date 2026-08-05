@@ -1,4 +1,4 @@
-![Downloads](https://img.shields.io/github/downloads/themockster/fvtt-token-action-hud-pf2e/latest/module.zip?color=2b82fc&label=DOWNLOADS&style=for-the-badge)
+![Downloads](https://img.shields.io/github/downloads/themockster/fvtt-token-action-hud-sf2e/latest/module.zip?color=2b82fc&label=DOWNLOADS&style=for-the-badge)
 
 # Token Action HUD Starfinder 2e
 
@@ -29,7 +29,10 @@ This module is a **Starfinder Second Edition** (`sf2e`) port of [Token Action HU
 ## Method 2
 1. On Foundry VTT's **Configuration and Setup** screen, go to **Add-on Modules**
 2. Click **Install Module**
-3. In the Manifest URL field, paste the release `module.json` URL for this repository
+3. In the Manifest URL field, paste:
+   ```
+   https://github.com/themockster/fvtt-token-action-hud-sf2e/releases/latest/download/module.json
+   ```
 4. Click **Install**
 
 # Required Modules
